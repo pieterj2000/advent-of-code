@@ -1,4 +1,4 @@
-
+#!/usr/bin/env stack
 -- stack script --resolver lts-21.22
 import Data.Char (isDigit, digitToInt)
 import Data.List (isPrefixOf,stripPrefix)
