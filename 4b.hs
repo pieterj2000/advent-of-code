@@ -4,10 +4,6 @@ import qualified Parser as P
 import Control.Applicative (Alternative(..))
 import Data.List (intersect, foldl')
 
-
-import Debug.Trace
-
-
 inputFile = "4a.input"
 
 main = do
@@ -35,13 +31,3 @@ iter tot _ [] = tot
 iter tot (c:cs) (w:ws) = let have i = if w >= i then c else 0
                              newcs = zipWith (+) cs (map have [1..])
                     in iter (tot + c) newcs ws
-
-{-
-iter :: [Int] -> Int
-iter = (\(a,_,_,_,_,_ ) -> a) . foldl' step (0,1,1,1,1,1)
-
-step :: (Int, Int, Int, Int, Int, Int) -> Int -> (Int, Int, Int, Int, Int, Int)
-step (tot, a,b,c,d,e) points = let p i points = if points >= i then a else 0
-                          in (tot + a, b + p 1 points, c + p 2 points, d + p 3 points, e + p 4 points, 1 + p 5 points)
-
--}
