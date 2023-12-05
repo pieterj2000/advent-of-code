@@ -8,12 +8,14 @@ module Parser (
     string,
     digit,
     int,
-    space
+    space,
+    newline,
+    oneOf
 ) where
 
 import Data.Char (isDigit, digitToInt)
 import Data.Maybe (fromJust)
-import Control.Applicative (Alternative (..))
+import Control.Applicative (Alternative (..), asum)
 
 newtype Parser a = P { parse :: String -> (String, Maybe a) }
 parseResultMaybe :: Parser a -> String -> Maybe a
@@ -63,3 +65,9 @@ int = read <$> some (satisfy isDigit)
 
 space :: Parser ()
 space = char ' ' *> pure ()
+
+newline :: Parser ()
+newline = char '\n' *> pure ()
+
+oneOf :: [String] -> Parser String
+oneOf xs = asum $ map string xs
