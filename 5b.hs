@@ -5,6 +5,7 @@ import Control.Applicative (Alternative(..), asum)
 import Data.List (minimumBy)
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
+import Control.Monad ((>=>))
 
 inputFile = "5a.input"
 
@@ -14,10 +15,10 @@ main = do
 
 
 calc :: String -> Int
-calc input = let (seeds, maps) = parseInput input
-                 f = foldr1 (.) . reverse $ maps
-             --in minimumBy (compare `on` f) seeds
-             in minimum . map f $ seeds
+calc input = let (seedCriticalPoints, maps) = parseInput input
+                 f = foldl1 (>=>) maps
+                 g (a,b) = [a,b]
+             in minimum $ seedCriticalPoints >>= f >>= g
 
 numP :: P.Parser Int
 numP = many P.space *> P.int
@@ -27,11 +28,11 @@ groupPairs [] = []
 groupPairs (a:b:xs) = (a,b) : groupPairs xs
 groupPairs (a:xs) = error "geen even aantal seedsrange grenzen"
 
-toRange :: (Int, Int) -> [Int]
-toRange (start, len) = [start..(start+len-1)]
+toBounds :: (Int, Int) -> (Int, Int)
+toBounds (left, len) = (left, left + len - 1)
 
-seedP :: P.Parser [Int]
-seedP = concat . map toRange . groupPairs <$> (P.string "seeds:" *> some numP)
+seedP :: P.Parser [(Int, Int)]
+seedP = map toBounds . groupPairs <$> (P.string "seeds:" *> some numP)
 
 mapLineP :: P.Parser (Int, Int, Int)
 mapLineP = P.newline *> ( (\a b c -> (a,b,c)) <$> numP <*> numP <*> numP )
@@ -42,14 +43,34 @@ mapP :: P.Parser [(Int, Int, Int)]
 mapP = let headerP = P.oneOf names *> P.string "-to-" *> P.oneOf names *> P.string " map:"
         in headerP *> some mapLineP
 
-applyMap :: Int -> [(Int, Int, Int)] -> Int
-applyMap x = let    doLine :: Int -> (Int, Int, Int) -> Maybe Int
-                    doLine x (dest, src, len) = if (x >= src) && (x < src + len)
-                        then Just (x - src + dest) else Nothing
-             in  fromMaybe x . asum . map (doLine x)
+updateBoundsLine :: (Int, Int, Int) -> (Int, Int) ->  [(Int, Int)]
+updateBoundsLine (dest, src, len) (l,r) =   let sbetween x (a,b) = (x > a) && (x < b)
+                                                (bl, br) = (src, src + len)
 
-mapsP :: P.Parser [Int -> Int]
-mapsP = some (flip applyMap <$> (many P.newline *> mapP))
+                                                split :: (Int, Int) -> [Int] -> [(Int, Int)]
+                                                split (a,b) [] = [(a,b)]
+                                                split (a,b) (x:xs) = if sbetween x (a,b)
+                                                                        then (a,x) : split (x,b) xs
+                                                                        else split (a,b) xs
+                                            in split (l,r) [bl,br]
 
-parseInput :: String -> ([Int], [Int -> Int])
+
+
+
+applyMapsToBound :: [(Int, Int, Int)] -> (Int, Int) -> (Int, Int)
+applyMapsToBound [] (l,r) = (l,r)
+applyMapsToBound ((dest, src, len):bds) (l,r) = let between x (a,b) = (x >= a) && (x < b)
+                                                    (bl, br) = (src, src + len)
+                                                    applyFun x = x - src + dest
+                                                in if between l (bl,br)
+                                                    then (applyFun l, applyFun r)
+                                                    else applyMapsToBound bds (l,r)
+
+updateBoundsMap :: [(Int, Int, Int)] -> (Int, Int) -> [(Int, Int)]
+updateBoundsMap fs = map (applyMapsToBound fs) . foldr1 (>=>) (map updateBoundsLine fs)
+
+mapsP :: P.Parser [(Int, Int) -> [(Int, Int)]]
+mapsP = some (updateBoundsMap <$> (many P.newline *> mapP))
+
+parseInput :: String -> ([(Int,Int)], [(Int, Int) -> [(Int, Int)]])
 parseInput =  P.parseResult $ (\a c b -> (a,b)) <$> seedP <*> many P.newline <*> mapsP
