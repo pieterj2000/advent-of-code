@@ -13,12 +13,15 @@ main = do
         repl '2' = 'Q'
         repl c = c
     let input = if inputFile == "8b.ex.input" then map repl input' else input'
-    --print $ calc input
-    calc input
+    print $ calc input
 
---calc :: String -> Int
---calc = length . takeWhile (not . all isZ) . walkPath . parseInput
-calc = mapM_ (print . map intToLabel) . take 20 . takeWhile (not . all isZ) . walkPath . parseInput
+calc :: String -> Int
+calc = foldr1 lcm . map (snd . cycleLength isZ) . (\(a,d,startNodes) -> map (walkPath (a,d)) startNodes) . parseInput
+
+cycleLength :: (a -> Bool)-> [a] -> (Int, Int)
+cycleLength p xs = let first = length $ takeWhile (not . p) xs
+                       secondm1 = length $ takeWhile (not . p) $ drop (first + 1) xs
+                       in (first, secondm1+1)
 
 data Direction = L | R deriving (Read, Show, Eq)
 
@@ -50,10 +53,9 @@ parseInput input =  let dir = map (read . pure) . head . lines $ input
                         ar = A.array (0, 26*26*26-1) elts
                     in (ar, dir, startNodes)
 
-doStep :: A.Array Int (Int, Int) -> ([Int],[Direction]) -> ([Int],[Direction])
-doStep graph (curNodes, d:dirs) =   let step place = (if d == L then fst else snd) (graph ! place)
-                                        nextNodes = map step curNodes
-                                    in (nextNodes, dirs)
+doStep :: A.Array Int (Int, Int) -> (Int,[Direction]) -> (Int,[Direction])
+doStep graph (place, d:dirs) =    let nextplace = (if d == L then fst else snd) (graph ! place)
+                                  in (nextplace, dirs)
 
-walkPath :: (A.Array Int (Int, Int), [Direction], [Int]) -> [[Int]]
-walkPath (graph, dirs, startNodes) = map fst $ iterate (doStep graph) (startNodes, cycle dirs)
+walkPath :: (A.Array Int (Int, Int), [Direction]) -> Int -> [Int]
+walkPath (graph, dirs) start = map fst $ iterate (doStep graph) (start, cycle dirs)
