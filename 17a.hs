@@ -18,7 +18,7 @@ main = do
 
 type Point = (Int, Int)
 data Dir = U | D | L | R deriving (Show, Eq, Enum, Ord)
-data Node = Node { loc :: Point, dir :: Dir, straight :: Int } deriving (Show, Eq, Ord)
+data Node = Node { loc :: Point, dir :: Dir } deriving (Show, Eq, Ord)
 type Grid = A.UArray Point Int
 
 --instance Ord Node where
@@ -26,7 +26,7 @@ type Grid = A.UArray Point Int
 -- Tuple (Node, Int) heeft ordering lexicographisch, dus als Node altijd gelijk is, pakt hij (zoals gewenst) vergelijking van de ints
 
 instance Hashable Node where
-    hashWithSalt s (Node loc dir straight) = s `hashWithSalt` loc `hashWithSalt` (fromEnum dir) `hashWithSalt` straight
+    hashWithSalt s (Node loc dir) = s `hashWithSalt` loc `hashWithSalt` (fromEnum dir)
 
 
 move :: Point -> Dir -> Point
@@ -34,6 +34,15 @@ move (x,y) U = (x,y-1)
 move (x,y) D = (x,y+1)
 move (x,y) L = (x-1,y)
 move (x,y) R = (x+1,y)
+
+moveSeq :: Point -> [Dir] -> Point
+moveSeq p [] = p
+moveSeq p (d:dr) = moveSeq (move p d) dr
+
+moveStraightThenDir :: Point -> Dir -> Int -> Dir -> [Point]
+moveStraightThenDir p _ 0 finalDir = [move p finalDir]
+moveStraightThenDir p straightDir straightDist finalDir = pNew : moveStraightThenDir pNew straightDir (straightDist - 1) finalDir
+    where pNew = move p straightDir
 
 opposites :: Dir -> Dir -> Bool
 opposites U D = True
@@ -45,7 +54,7 @@ opposites _ _ = False
 --calc :: String -> Int
 calc input =    let grid = parseInput input
                     end = snd $ A.bounds grid
-                    start = Node (0,0) R 0
+                    start = Node (0,0) R
                 in search grid start end
 
 parseInput :: String -> Grid
@@ -54,13 +63,17 @@ parseInput input =  let w = length $ head $ lines input
                         indices = map (\i -> let (y,x) = divMod i w in (x,y)) [0..]
                     in A.array ((0,0), (w-1,h-1)) $ zip indices $ map digitToInt $ filter (/='\n') input
 
+getPathWeight :: Grid -> [Point] -> Int
+getPathWeight _ [] = 0
+getPathWeight g (p:ps) = (g A.! p) + getPathWeight g ps
 
-neighbours :: Grid -> Node -> [Node]
-neighbours g (Node p dir straight) = nodes
-    where   possDirs = filter (\d -> not (dir == d && straight >= 3) && not (opposites d dir)) [U,D,L,R]
-            possPoints = map (\d -> (move p d,d)) possDirs
-            validPoints = filter (A.inRange (A.bounds g) . fst) possPoints
-            nodes = map (\(q,d) -> Node q d (if d == dir then straight + 1 else 1)) validPoints
+neighbours :: Grid -> Node -> [(Node, Int)]
+neighbours g (Node p dir) = nodes
+    where   possDirs = filter (\d -> (dir /= d) && not (opposites d dir)) [U,D,L,R]
+            possPaths = [ (moveStraightThenDir p dir straight d, d) | straight<-[0..2], d<-possDirs]
+            possPoints = map (\(path, finalDir) -> (last path, finalDir, getPathWeight g path)) possPaths
+            validPoints = filter (\(point, dir, weight) -> A.inRange (A.bounds g) point) possPoints
+            nodes = map (\(point, dir, weight) -> (Node point dir, weight)) validPoints
 
 
 search :: Grid -> Node -> Point -> Int
@@ -76,12 +89,12 @@ step graph dest queue dists
         (q,qDist,_) = fromJust $ Q.findMin queue
         neighb = neighbours graph q
 
-        insert :: (Q.HashPSQ Node Int Int, HM.HashMap Node Int) -> Node -> (Q.HashPSQ Node Int Int, HM.HashMap Node Int)
-        insert (queue, dists) node = 
-            let dist = qDist + (graph A.! loc node)
+        insert :: (Q.HashPSQ Node Int Int, HM.HashMap Node Int) -> (Node, Int) -> (Q.HashPSQ Node Int Int, HM.HashMap Node Int)
+        insert (queue, dists) (node, weight) =
+            let dist = qDist + weight
             in case HM.lookup node dists of
                 Nothing -> (Q.insert node dist 0 queue, HM.insert node dist dists)
-                Just d  
+                Just d
                     | d < dist  -> (queue, dists)
                     | otherwise -> (Q.insert node dist 0 queue, HM.insert node dist dists)
 
