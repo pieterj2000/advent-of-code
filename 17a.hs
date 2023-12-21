@@ -1,11 +1,13 @@
-import qualified Data.Heap as H
-import qualified Data.Array.IArray as A
-import qualified Data.HashMap.Lazy as M
+import qualified Data.Array.Unboxed as A
+import qualified Data.HashPSQ as Q
 import Data.Char (digitToInt, intToDigit)
 
 
 import Debug.Trace
 import Data.Hashable (Hashable (hashWithSalt))
+import Data.Maybe (fromJust)
+import Data.List (foldl1', foldl')
+import qualified Data.HashMap.Lazy as HM
 
 inputFile = "17a.input"
 
@@ -13,25 +15,14 @@ main = do
     input <- readFile inputFile
     print $ calc input
 
---calc :: String -> Int
-calc input =    let grid = parseInput input
-                    end = snd $ A.bounds grid
-                    start = Node (0,0) R 0
-                in search grid start end
-
-parseInput :: String -> Grid
-parseInput input =  let w = length $ head $ lines input
-                        h = length $ lines input
-                        indices = map (\i -> let (y,x) = divMod i w in (x,y)) [0..]
-                    in A.array ((0,0), (w-1,h-1)) $ zip indices $ map digitToInt $ filter (/='\n') input
 
 type Point = (Int, Int)
-data Dir = U | D | L | R deriving (Show, Eq, Enum)
-data Node = Node { loc :: Point, dir :: Dir, straight :: Int } deriving (Show, Eq)
-type Grid = A.Array Point Int
+data Dir = U | D | L | R deriving (Show, Eq, Enum, Ord)
+data Node = Node { loc :: Point, dir :: Dir, straight :: Int } deriving (Show, Eq, Ord)
+type Grid = A.UArray Point Int
 
-instance Ord Node where
-    compare _ _ = EQ
+--instance Ord Node where
+--    compare _ _ = EQ
 -- Tuple (Node, Int) heeft ordering lexicographisch, dus als Node altijd gelijk is, pakt hij (zoals gewenst) vergelijking van de ints
 
 instance Hashable Node where
@@ -51,6 +42,19 @@ opposites L R = True
 opposites R L = True
 opposites _ _ = False
 
+--calc :: String -> Int
+calc input =    let grid = parseInput input
+                    end = snd $ A.bounds grid
+                    start = Node (0,0) R 0
+                in search grid start end
+
+parseInput :: String -> Grid
+parseInput input =  let w = length $ head $ lines input
+                        h = length $ lines input
+                        indices = map (\i -> let (y,x) = divMod i w in (x,y)) [0..]
+                    in A.array ((0,0), (w-1,h-1)) $ zip indices $ map digitToInt $ filter (/='\n') input
+
+
 neighbours :: Grid -> Node -> [Node]
 neighbours g (Node p dir straight) = nodes
     where   possDirs = filter (\d -> not (dir == d && straight >= 3) && not (opposites d dir)) [U,D,L,R]
@@ -60,10 +64,31 @@ neighbours g (Node p dir straight) = nodes
 
 
 search :: Grid -> Node -> Point -> Int
-search graph start dest = step graph dest (H.singleton (start, 0)) initialDists
+search graph start dest = step graph dest (Q.singleton start 0 0) (HM.singleton start 0)
+
+
+step :: Grid -> Point -> Q.HashPSQ Node Int Int -> HM.HashMap Node Int -> Int
+step graph dest queue dists
+    | Q.null queue          = error $ show queue
+    | loc q == dest         = qDist             -- einde gevonden
+    | otherwise             = step graph dest newQueue newDists
     where
-        ps = A.range $ A.bounds graph
-        initialDists = M.fromList [ (Node p dir s, (Node (0,0) R 0, maxBound :: Int)) | p<-ps, dir<-[U .. R], s<-[0..4] ]
+        (q,qDist,_) = fromJust $ Q.findMin queue
+        neighb = neighbours graph q
+
+        insert :: (Q.HashPSQ Node Int Int, HM.HashMap Node Int) -> Node -> (Q.HashPSQ Node Int Int, HM.HashMap Node Int)
+        insert (queue, dists) node = 
+            let dist = qDist + (graph A.! loc node)
+            in case HM.lookup node dists of
+                Nothing -> (Q.insert node dist 0 queue, HM.insert node dist dists)
+                Just d  
+                    | d < dist  -> (queue, dists)
+                    | otherwise -> (Q.insert node dist 0 queue, HM.insert node dist dists)
+
+        (newQueue, newDists) = foldl insert (Q.deleteMin queue, dists) neighb
+
+
+
 
 showDir U = '^'
 showDir D = 'v'
@@ -85,48 +110,3 @@ doprint g = let (_,(w,h)) = A.bounds g
                 --(\x -> (\(n,d) -> if straight n < 0 then '.' else showDir (dir n)) $ g A.! (x,y)) [0..w] ++ "\n") [0..h]
                 (\x -> (\(n,d) -> showSpec (loc n) (x,y) ) $ g A.! (x,y)) [0..w] ++ "\n") [0..h]
                 --(\x -> (\(n,d) -> intToDigit (straight n)) $ g A.! (x,y)) [0..w] ++ "\n") [0..h]
-
-
-step :: Grid -> Point -> H.Heap (Node, Int) -> M.HashMap Node (Node, Int) -> Int
-step graph dest queue dists | H.null queue                  = error $ show dists
-                            | loc q == dest                 = qDist             -- einde gevonden
-                            | (snd $ dists M.! q) < qDist   = step graph dest (H.deleteMin queue) dists -- is al een betere weg gevonden naar node, deze is oud
-                            | otherwise                     = step graph dest newQueue newDists
-            where
-                (q,qDist) = H.minimum queue
-                neighb = neighbours graph q
-                neighbD = map (\n -> (n, qDist + (graph A.! loc n))) neighb
-                newQueue = H.union (H.deleteMin queue) (H.fromList neighbD)
-                mergef n (p1,d1) (p2,d2) = if d1 < d2 then (p1,d1) else (p2,d2)
-                newDists = M.unionWithKey mergef dists $ M.fromList $ map (\(n,d) -> (n, (q,d))) neighbD
-
-
-
-{-
-
-
-search :: Grid -> Node -> Point -> Int
-search graph start dest = step graph dest (H.singleton (start, 0)) (A.listArray (A.bounds graph) [ maxBound :: Int | x<-A.range $ A.bounds graph ] )
-
-
-doprint :: Grid -> String
-doprint g = let (_,(w,h)) = A.bounds g
-            in concat $ map (\y -> map (\x -> intToDigit $ (\x -> if x > 10 then 0 else x) $ g A.! (x,y)) [0..(w-1)] ++ "\n") [0..(h-1)]
-
-
-step :: Grid -> Point -> H.Heap (Node, Int) -> Grid -> Int
-step graph dest queue dists | H.null queue                  = error $ show dists
-                            | loc q == dest                 = trace (doprint dists) $ qDist             -- einde gevonden
-                            | (dists A.! loc q) < qDist     = step graph dest (H.deleteMin queue) dists -- is al een betere weg gevonden naar node, deze is oud
-                            | otherwise                     = traceShow q $ step graph dest newQueue newDists
-            where
-                (q,qDist) = H.minimum queue
-                neighb = neighbours graph q
-                neighbD = map (\n -> (n, qDist + (graph A.! loc n))) neighb
-                newQueue = H.union (H.deleteMin queue) (H.fromList neighbD)
-                newDists = A.accum min dists $ map (\(n,d) -> (loc n, d)) neighbD
-
-
-
-
--}
