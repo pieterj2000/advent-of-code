@@ -10,7 +10,11 @@ module Parser (
     int,
     space,
     newline,
-    oneOf
+    oneOf,
+    between,
+    inBrackets,
+    separatedBy,
+    commaSep
 ) where
 
 import Data.Char (isDigit, digitToInt)
@@ -71,3 +75,16 @@ newline = char '\n' *> pure ()
 
 oneOf :: [String] -> Parser String
 oneOf xs = asum $ map string xs
+
+between :: Parser a -> Parser c -> Parser b -> Parser b
+between left right within = left *> within <* right
+
+inBrackets :: Parser a -> Parser a
+inBrackets = between (char '{') (char '}')
+
+separatedBy :: Parser a -> Parser b -> Parser [b]
+separatedBy comma ding = let dingcomma = ding <* comma
+                         in (\ds d -> ds ++ [d]) <$> many dingcomma <*> ding
+
+commaSep :: Parser b -> Parser [b]
+commaSep = separatedBy (char ',')

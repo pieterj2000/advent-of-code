@@ -23,10 +23,17 @@ move (x,y) D = (x,y+1)
 move (x,y) L = (x-1,y)
 move (x,y) R = (x+1,y)
 
+charToDir :: Char -> Dir
+charToDir '0' = R
+charToDir '1' = D
+charToDir '2' = L
+charToDir '3' = U
+
 parseInput :: String -> [(Dir, Int)]
 parseInput input =  let ls = lines input
-                        dir = read . take 1
-                        dist = read . takeWhile isDigit . drop 2
+                        hexi = take 6 . drop 1 . dropWhile (/='#')
+                        dir = charToDir . last . hexi 
+                        dist = read . ("0x" ++ ) . take 5 . hexi
                     in map (\l -> (dir l, dist l)) ls
 
 opp :: Dir -> Dir
