@@ -10,14 +10,16 @@ module Parser (
     int,
     space,
     newline,
-    oneOf,
+    oneOfChar,
+    oneOfString,
     between,
     inBrackets,
     separatedBy,
-    commaSep
+    commaSep,
+    word
 ) where
 
-import Data.Char (isDigit, digitToInt)
+import Data.Char (isDigit, digitToInt, isAlpha)
 import Data.Maybe (fromJust)
 import Control.Applicative (Alternative (..), asum)
 
@@ -73,8 +75,11 @@ space = char ' ' *> pure ()
 newline :: Parser ()
 newline = char '\n' *> pure ()
 
-oneOf :: [String] -> Parser String
-oneOf xs = asum $ map string xs
+oneOfString :: [String] -> Parser String
+oneOfString xs = asum $ map string xs
+
+oneOfChar :: [Char] -> Parser Char
+oneOfChar xs = asum $ map char xs
 
 between :: Parser a -> Parser c -> Parser b -> Parser b
 between left right within = left *> within <* right
@@ -88,3 +93,6 @@ separatedBy comma ding = let dingcomma = ding <* comma
 
 commaSep :: Parser b -> Parser [b]
 commaSep = separatedBy (char ',')
+
+word :: Parser String
+word = many (satisfy isAlpha)
