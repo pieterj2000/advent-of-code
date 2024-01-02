@@ -8,6 +8,8 @@ module Parser (
     string,
     digit,
     int,
+    onezero,
+    signedInt,
     space,
     newline,
     oneOfChar,
@@ -20,7 +22,7 @@ module Parser (
 ) where
 
 import Data.Char (isDigit, digitToInt, isAlpha)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, maybeToList)
 import Control.Applicative (Alternative (..), asum)
 
 newtype Parser a = P { parse :: String -> (String, Maybe a) }
@@ -52,7 +54,7 @@ instance Alternative Parser where
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy p = P $ \input -> case input of
     []      -> ([], Nothing)
-    (x:xs)  -> if p x then (xs, Just x) else (xs, Nothing)
+    (x:xs)  -> if p x then (xs, Just x) else (x:xs, Nothing)
 
 anyChar :: Parser Char
 anyChar = satisfy (const True)
@@ -66,8 +68,16 @@ string s = traverse char s
 digit :: Parser Int
 digit = digitToInt <$> satisfy isDigit
 
-int :: Parser Int
+int :: (Read a, Integral a) => Parser a
 int = read <$> some (satisfy isDigit)
+
+onezero :: Parser a -> Parser [a]
+onezero (P p) = P $ \input -> case p input of
+    (rest, Just a) -> (rest, Just [a])
+    (rest, Nothing) -> (rest, Just [])
+
+signedInt :: (Read a, Integral a) => Parser a
+signedInt = read <$> ( (++) <$> onezero (char '-') <*> some (satisfy isDigit) )
 
 space :: Parser ()
 space = char ' ' *> pure ()
