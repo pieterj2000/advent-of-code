@@ -17,7 +17,7 @@ touch $2a.ex.input
 touch $2a.input
 cat > $2a.hs <<- EOM
 
-inputFile = "7a.input"
+inputFile = "7a.ex.input"
 main = do
     input <- readFile inputFile
     print $ calc . parse $ input
