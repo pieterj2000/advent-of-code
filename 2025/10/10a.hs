@@ -24,12 +24,12 @@ pline spul =
 calc = sum . map calci
 
 calci (doel, combs) = 
-  let doelnum = foldl' (\acc b -> (shift acc 1) .|. (if b then 1 else 0)) 0 $ reverse doel
-      buttons = map combtonums combs
-      pressvecs = vecs $ length combs
-      pressvecs' = sortBy (comparing sum) pressvecs
-      resultaten = map (\press -> (press, applyButtons buttons press)) pressvecs'
-  in sum . fst . head . filter ((==doelnum) . snd) $ resultaten
+    let doelnum = foldl' (\acc b -> (shift acc 1) .|. (if b then 1 else 0)) 0 $ reverse doel
+        buttons = map combtonums combs
+        pressvecs = vecs $ length combs
+        pressvecs' = sortBy (comparing sum) pressvecs
+        resultaten = map (\press -> (press, applyButtons buttons press)) pressvecs'
+    in sum . fst . head . filter ((==doelnum) . snd) $ resultaten
 
 
 combtonums :: [Int] -> Int
